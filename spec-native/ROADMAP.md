@@ -14,21 +14,24 @@ es coherente con la direccion actual del proyecto.
 Si ROADMAP.md menciona una iniciativa pero no existe spec para ella,
 el siguiente paso es crear esa spec antes de implementar.
 
-## Template
+## Roadmap actual
 
-### Ahora
+## Ahora
 
-- Iniciativas activas
-- Bloqueos actuales
+- **Motor OCR Python (POC)**: OCR de PDFs escaneados e imagenes con
+  Tesseract, orquestado via Make/Just, ejecutable en contenedores Docker.
+  Iniciativa activa: `ocr-engine`.
+## Despues
 
-### Despues
-
-- Siguientes prioridades
-
+- Evaluar comando de subida al API del RAG como iniciativa separada.
+- Mejorar calidad OCR con preprocesamiento de imagen (thresholding,
+  deskew, eliminacion de ruido).
 ### Mas adelante
 
-- Apuestas futuras
+- Version Rust bajo `rust/src` si se necesita mayor velocidad o binario
+  autocontenido.
 
 ### No hacer por ahora
 
-- Ideas descartadas temporalmente
+- No acoplar la herramienta al ciclo de vida interno de `faiss-poc`.
+- No aceptar Markdown/HTML como salida final por defecto.

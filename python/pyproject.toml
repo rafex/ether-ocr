@@ -1,0 +1,29 @@
+[project]
+name = "ether-ocr"
+version = "0.2.0"
+description = "OCR engine and document preparation tools for RAG ingestion."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+ocr = [
+    "pytesseract>=0.3",
+    "pdf2image>=1.17",
+    "pillow>=10",
+]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "black>=24",
+    "isort>=5",
+]
+
+[project.scripts]
+ether-ocr = "ether_ocr.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -32,3 +32,24 @@ registrada condiciona el diseno o la implementacion.
 - Decision: que se decidio exactamente
 - Consecuencias: costos, beneficios y limites
 - Reemplaza: DEC-XXXX o `none`
+
+### DEC-0001 - Usar Poppler como extractor PDF inicial
+
+- Fecha: 2026-06-03
+- Estado: accepted
+- Relacionado con specs: pdf-to-rag-text
+- Relacionado con tareas: TASK-0002
+- Contexto: El RAG consumidor acepta texto plano UTF-8 y los PDFs deben convertirse antes de subirlos. Implementar parsing PDF completo en Python agregaria dependencias y complejidad innecesaria para PDFs con capa de texto.
+- Decision: Usar `pdftotext -layout` de Poppler como dependencia externa para extraer texto de PDFs; la limpieza y validacion viven en Python.
+- Consecuencias: La herramienta es simple y estable para PDFs textuales, pero requiere instalar Poppler y no resuelve PDFs escaneados sin OCR.
+- Reemplaza: none
+
+### DEC-0002 — Usar Tesseract como motor OCR
+
+- Fecha: 2026-06-04
+- Estado: `accepted`
+- Relacionado con specs:
+- Contexto: Los PDFs escaneados e imagenes no tienen capa de texto extraible con Poppler. Se necesita un motor OCR para extraer texto de estos documentos. Tesseract es el motor open-source mas maduro con soporte multi-idioma y bindings Python estables (pytesseract).
+- Decisión: Usar Tesseract OCR como motor principal para PDFs escaneados e imagenes. La conversion PDF→imagen se hace con pdf2image + Poppler. Las dependencias se instalan en el contenedor Docker, no en el host. El pipeline decide automaticamente si usar Poppler o Tesseract segun el tipo de entrada.
+- Consecuencias: Beneficios: OCR funcional para documentos escaneados, sin dependencias propietarias. Costos: requiere instalar Tesseract + datos de idioma (~50MB por idioma), la calidad depende de la resolucion de entrada, el procesamiento es mas lento que Poppler para PDFs con capa de texto.
+- Reemplaza: none

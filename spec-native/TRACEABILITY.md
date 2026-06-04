@@ -23,4 +23,5 @@ la relacion antes de continuar.
 
 | Spec | Estado | Tareas | Decisiones | Archivos principales | Validacion | Observaciones |
 | --- | --- | --- | --- | --- | --- | --- |
-| SPEC-0001 | done | TASK-0001, TASK-0002 | DEC-0001 | `src/auth/*` | `npm test` | |
+| pdf-to-rag-text | done | TASK-0001, TASK-0002, TASK-0003, TASK-0004 | DEC-0001 | `python/src/ether_ocr/*`, `python/tests/*` | `PYTHONPATH=python/src python3 -m unittest discover -s python/tests` | Genera texto plano UTF-8 para el RAG de `faiss-poc`. |
+| ocr-engine | active | TASK-OCR-0001, TASK-OCR-0002, TASK-OCR-0003, TASK-OCR-0004, TASK-OCR-0005 | DEC-0002 | `python/src/ether_ocr/ocr.py`, `python/src/ether_ocr/pipeline.py`, `python/tests/test_ocr.py`, `python/tests/test_pipeline.py`, `scripts/`, `Makefile`, `Justfile`, `containers/` | `make test`, `make docker-build` | OCR con Tesseract para PDFs escaneados e imagenes. Orquestado via Make/Just, contenerizado con Docker. |

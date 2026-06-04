@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# SpecNative context (not needed at runtime)
+spec-native/
+agents/
+
+# Worktrees
+.opencode/
+
+# Python artifacts
+python/build/
+python/dist/
+python/*.egg-info/
+python/__pycache__/
+python/**/__pycache__/
+python/.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Container data (volumes)
+containers/data/
+
+# Documentation
+docs/
+*.md
+!python/README.md
+
+# License
+LICENSE

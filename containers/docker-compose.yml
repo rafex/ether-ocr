@@ -1,0 +1,26 @@
+# docker-compose.yml — Development environment for ether-ocr
+
+version: "3.9"
+
+services:
+  ether-ocr:
+    build:
+      context: ..
+      dockerfile: containers/Dockerfile
+    image: ether-ocr:latest
+    container_name: ether-ocr-dev
+    volumes:
+      # Mount source code for live development
+      - ../python:/workspace/python:ro
+      - ../scripts:/workspace/scripts:ro
+      # Data volumes
+      - ./data/input:/data/input:ro
+      - ./data/output:/data/output
+    environment:
+      - PYTHONPATH=/workspace/python/src
+      - TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+    working_dir: /workspace
+    # Override to keep container alive for development
+    command: ["tail", "-f", "/dev/null"]
+    stdin_open: true
+    tty: true
