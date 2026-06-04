@@ -116,5 +116,92 @@ class TestOcrEndpoint(unittest.TestCase):
         self.assertIn("post", schema["paths"]["/api/v1/ocr"])
 
 
+class TestPrepareEndpoint(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = create_app()
+        cls.client = TestClient(cls.app)
+
+    @patch("ether_ocr.api.routes.prepare.prepare_document")
+    def test_prepare_text_success(self, mock_prepare):
+        from pathlib import Path
+        from ether_ocr.preparer import PreparationResult
+        from ether_ocr.validator import ValidationResult
+
+        mock_prepare.return_value = PreparationResult(
+            input_path=Path("/tmp/test.txt"),
+            output_path=Path("/tmp/test.txt"),
+            paragraphs=3,
+            size_bytes=100,
+            validation=ValidationResult(valid=True),
+        )
+
+        with patch.object(Path, "read_text", return_value="Clean text."):
+            with patch.object(Path, "unlink"):
+                response = self.client.post(
+                    "/api/v1/prepare",
+                    files={"file": ("test.txt", io.BytesIO(b"raw text"), "text/plain")},
+                    data={"skip-validation": "true"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertIn("text", data)
+        self.assertEqual(data["metadata"]["paragraphs"], 3)
+
+    def test_prepare_unsupported_extension(self):
+        response = self.client.post(
+            "/api/v1/prepare",
+            files={"file": ("doc.docx", io.BytesIO(b"fake"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        self.assertEqual(response.status_code, 415)
+
+    def test_prepare_openapi_registered(self):
+        response = self.client.get("/openapi.json")
+        schema = response.json()
+        self.assertIn("/api/v1/prepare", schema["paths"])
+
+
+class TestValidateEndpoint(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = create_app()
+        cls.client = TestClient(cls.app)
+
+    def test_validate_valid_text(self):
+        response = self.client.post(
+            "/api/v1/validate",
+            files={"file": ("valid.txt", io.BytesIO(b"Plain text.\n\nNo markdown here."), "text/plain")},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["valid"])
+        self.assertEqual(data["issues"], [])
+
+    def test_validate_markdown_rejected(self):
+        response = self.client.post(
+            "/api/v1/validate",
+            files={"file": ("bad.txt", io.BytesIO(b"# Title\n\n## Subtitle\n\n[link](http://example.com)"), "text/plain")},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["valid"])
+        self.assertGreater(len(data["issues"]), 0)
+
+    def test_validate_non_utf8_rejected(self):
+        response = self.client.post(
+            "/api/v1/validate",
+            files={"file": ("bad.bin", b"\xff\xfe\x00\x00", "application/octet-stream")},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("UTF-8", response.json()["detail"])
+
+    def test_validate_openapi_registered(self):
+        response = self.client.get("/openapi.json")
+        schema = response.json()
+        self.assertIn("/api/v1/validate", schema["paths"])
+
+
 if __name__ == "__main__":
     unittest.main()

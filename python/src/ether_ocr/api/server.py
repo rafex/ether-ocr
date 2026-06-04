@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ether_ocr.api.routes.health import router as health_router
 from ether_ocr.api.routes.ocr import router as ocr_router
+from ether_ocr.api.routes.prepare import router as prepare_router
 
 API_PREFIX = "/api/v1"
 
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────
     app.include_router(health_router, prefix=API_PREFIX)
     app.include_router(ocr_router, prefix=API_PREFIX)
+    app.include_router(prepare_router, prefix=API_PREFIX)
 
     return app
 

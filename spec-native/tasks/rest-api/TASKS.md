@@ -35,12 +35,12 @@
 
 - ID: TASK-API-0003
 - Title: Endpoint Prepare y Validate
-- State: todo
+- State: done
 - Owner: rafex
 - Dependencies: TASK-API-0001
-- Expected files: `python/src/ether_ocr/api/routes/prepare.py`, `python/src/ether_ocr/api/routes/validate.py`, `python/src/ether_ocr/api/schemas/prepare.py`
+- Expected files: `python/src/ether_ocr/api/routes/prepare.py`, `python/src/ether_ocr/api/schemas/prepare.py`
 - Close criteria: `POST /api/v1/prepare` y `POST /api/v1/validate` funcionales.
-- Validation: Tests de integracion.
+- Validation: 40/40 tests pasan. Endpoints registrados en OpenAPI.
 
 ### TASK-API-0004 — Autenticacion (API key + JWT)
 
