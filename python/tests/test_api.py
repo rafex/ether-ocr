@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import io
+import os
 import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from ether_ocr.api.server import create_app
-from ether_ocr.pipeline import OcrPipelineResult
-from ether_ocr.validator import ValidationResult
+# Disable auth for most tests
+os.environ["AUTH_ENABLED"] = "0"
+
+from ether_ocr.api.server import create_app  # noqa: E402
+from ether_ocr.pipeline import OcrPipelineResult  # noqa: E402
+from ether_ocr.validator import ValidationResult  # noqa: E402
 
 
 class TestHealthEndpoint(unittest.TestCase):
@@ -201,6 +205,73 @@ class TestValidateEndpoint(unittest.TestCase):
         response = self.client.get("/openapi.json")
         schema = response.json()
         self.assertIn("/api/v1/validate", schema["paths"])
+
+
+class TestAuth(unittest.TestCase):
+    """Authentication tests — run with auth enabled."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["AUTH_ENABLED"] = "1"
+        os.environ["API_KEYS"] = "test-key-123,other-key-456"
+        cls.app = create_app()
+        cls.client = TestClient(cls.app)
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ["AUTH_ENABLED"] = "0"
+        os.environ.pop("API_KEYS", None)
+
+    def test_health_no_auth_required(self):
+        response = self.client.get("/api/v1/health")
+        self.assertEqual(response.status_code, 200)
+
+    def test_ocr_without_auth_returns_401(self):
+        response = self.client.post(
+            "/api/v1/ocr",
+            files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_ocr_with_valid_api_key(self):
+        with patch("ether_ocr.api.routes.ocr.ocr_document") as mock_ocr:
+            from pathlib import Path
+            mock_ocr.return_value = OcrPipelineResult(
+                input_path=Path("/tmp/t.txt"), output_path=Path("/tmp/t.txt"),
+                pages=1, paragraphs=1, size_bytes=10, used_ocr=False,
+                validation=ValidationResult(valid=True),
+            )
+            with patch.object(Path, "read_text", return_value="ok"):
+                with patch.object(Path, "unlink"):
+                    response = self.client.post(
+                        "/api/v1/ocr",
+                        files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+                        headers={"X-API-Key": "test-key-123"},
+                        data={"validate": "false"},
+                    )
+            self.assertEqual(response.status_code, 200)
+
+    def test_ocr_with_invalid_api_key_returns_401(self):
+        response = self.client.post(
+            "/api/v1/ocr",
+            files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+            headers={"X-API-Key": "wrong-key"},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_prepare_without_auth_returns_401(self):
+        response = self.client.post(
+            "/api/v1/prepare",
+            files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_validate_without_auth_returns_401(self):
+        response = self.client.post(
+            "/api/v1/validate",
+            files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+        )
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":

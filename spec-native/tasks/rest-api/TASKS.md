@@ -46,12 +46,12 @@
 
 - ID: TASK-API-0004
 - Title: Autenticacion (API key + JWT)
-- State: todo
+- State: done
 - Owner: rafex
 - Dependencies: TASK-API-0001
-- Expected files: `python/src/ether_ocr/api/auth.py`, `python/src/ether_ocr/api/middleware.py`
+- Expected files: `python/src/ether_ocr/api/auth.py`
 - Close criteria: Endpoints rechazan 401 sin credenciales. API key y JWT funcionales.
-- Validation: `curl` sin header → 401, con header → 200.
+- Validation: 46/46 tests pasan. 401 sin header, 200 con X-API-Key valida.
 
 ### TASK-API-0005 — Soporte batch y textos largos
 

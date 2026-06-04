@@ -5,9 +5,10 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from starlette import status
 
+from ether_ocr.api.auth import AuthContext, require_auth
 from ether_ocr.api.schemas.prepare import (
     PrepareMetadata,
     PrepareResponse,
@@ -47,6 +48,7 @@ async def prepare_endpoint(
     file: UploadFile = File(..., description="PDF or UTF-8 text file"),
     skip_validation: bool = Form(default=False, alias="skip-validation"),
     pdftotext_bin: str = Form(default="pdftotext", alias="pdftotext-bin"),
+    auth: AuthContext = Depends(require_auth),
 ) -> PrepareResponse:
     _validate_file(file)
 
@@ -95,6 +97,7 @@ async def prepare_endpoint(
 )
 async def validate_endpoint(
     file: UploadFile = File(..., description="UTF-8 text file to validate"),
+    auth: AuthContext = Depends(require_auth),
 ) -> ValidateResponse:
     if file.filename is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Filename is required")

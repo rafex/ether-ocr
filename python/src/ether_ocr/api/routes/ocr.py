@@ -7,10 +7,11 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette import status
 
+from ether_ocr.api.auth import AuthContext, require_auth
 from ether_ocr.api.schemas.ocr import OcrMetadata, OcrResponse
 from ether_ocr.pipeline import ocr_document
 
@@ -97,6 +98,7 @@ async def ocr_endpoint(
     dpi: int = Form(default=300, ge=72, le=600, description="DPI for PDF-to-image conversion"),
     validate: bool = Form(default=True, description="Run RAG compatibility validation"),
     force_image: bool = Form(default=False, description="Force image mode (skip PDF logic)"),
+    auth: AuthContext = Depends(require_auth),
 ) -> OcrResponse:
     """Process an uploaded document through the OCR pipeline."""
     _validate_file(file)
