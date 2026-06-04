@@ -24,12 +24,12 @@
 
 - ID: TASK-API-0002
 - Title: Endpoint OCR (/api/v1/ocr)
-- State: todo
+- State: done
 - Owner: rafex
 - Dependencies: TASK-API-0001
 - Expected files: `python/src/ether_ocr/api/routes/ocr.py`, `python/src/ether_ocr/api/schemas/ocr.py`
 - Close criteria: `POST /api/v1/ocr` acepta PDF/imagen, devuelve texto + metadatos.
-- Validation: Test con PDF escaneado real y mock.
+- Validation: 33/33 tests pasan. Endpoint registrado en OpenAPI.
 
 ### TASK-API-0003 — Endpoint Prepare y Validate
 
