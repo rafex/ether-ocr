@@ -53,3 +53,13 @@ registrada condiciona el diseno o la implementacion.
 - Decisión: Usar Tesseract OCR como motor principal para PDFs escaneados e imagenes. La conversion PDF→imagen se hace con pdf2image + Poppler. Las dependencias se instalan en el contenedor Docker, no en el host. El pipeline decide automaticamente si usar Poppler o Tesseract segun el tipo de entrada.
 - Consecuencias: Beneficios: OCR funcional para documentos escaneados, sin dependencias propietarias. Costos: requiere instalar Tesseract + datos de idioma (~50MB por idioma), la calidad depende de la resolucion de entrada, el procesamiento es mas lento que Poppler para PDFs con capa de texto.
 - Reemplaza: none
+
+### DEC-0003 — Usar FastAPI como framework REST
+
+- Fecha: 2026-06-04
+- Estado: `accepted`
+- Relacionado con specs:
+- Contexto: ether-ocr necesita exponer una API REST. Se evaluaron FastAPI y Flask. FastAPI ofrece validacion nativa con Pydantic, generacion automatica de OpenAPI, soporte async nativo y mejor rendimiento que Flask. Es el framework mas usado en Python moderno para APIs.
+- Decisión: Usar FastAPI + uvicorn como framework para la API REST. Usar Pydantic v2 para schemas de request/response. La API se versiona con prefijo /api/v1/.
+- Consecuencias: Beneficios: OpenAPI auto-generado, validacion de tipos en runtime, docs interactivos (/docs), mejor ecosistema async. Costos: dependencia adicional (~5MB), curva de aprendizaje si el equipo solo conoce Flask. La decision es reversible — FastAPI y Flask comparten概念 similares.
+- Reemplaza: none

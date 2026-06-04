@@ -26,8 +26,7 @@ COPY python/pyproject.toml python/README.md ./
 COPY python/src/ ./src/
 
 RUN python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir -e . && \
-    /opt/venv/bin/pip install --no-cache-dir pytesseract pdf2image pillow
+    /opt/venv/bin/pip install --no-cache-dir -e '.[ocr,api]'
 
 # ─── Runtime stage ───────────────────────────────────────────
 FROM base AS runtime
@@ -46,5 +45,6 @@ COPY scripts/ ./scripts/
 # Create data directories
 RUN mkdir -p /data/input /data/output
 
-# Default command: show available commands
-CMD ["python3", "-m", "ether_ocr", "--help"]
+# Default command: start the REST API server
+EXPOSE 8000
+CMD ["python3", "-m", "ether_ocr.api.server"]

@@ -18,9 +18,9 @@ el siguiente paso es crear esa spec antes de implementar.
 
 ## Ahora
 
-- **Motor OCR Python (POC)**: OCR de PDFs escaneados e imagenes con
-  Tesseract, orquestado via Make/Just, ejecutable en contenedores Docker.
-  Iniciativa activa: `ocr-engine`.
+- **API REST**: exponer ether-ocr como servicio HTTP con FastAPI.
+  Endpoints: OCR, preparacion, validacion. Autenticacion, batch,
+  metadatos y respuestas comprimidas. Iniciativa activa: `rest-api`.
 ## Despues
 
 - Evaluar comando de subida al API del RAG como iniciativa separada.

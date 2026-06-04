@@ -5,7 +5,7 @@
 SHELL := /bin/bash
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
-.PHONY: help build test lint docker-build docker-push clean
+.PHONY: help build test lint api docker-build docker-push clean
 
 # ─── Default target ───────────────────────────────────────────
 .DEFAULT_GOAL := help
@@ -31,6 +31,10 @@ test: ## Run test suite
 lint: ## Lint and format check
 	@echo "==> Running linter"
 	python3 "$(ROOT_DIR)/scripts/python/lint.py"
+
+api: ## Start the REST API server
+	@echo "==> Starting ether-ocr API server"
+	python3 "$(ROOT_DIR)/scripts/python/api.py"
 
 # ─── OCR targets ──────────────────────────────────────────────
 

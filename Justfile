@@ -29,6 +29,11 @@ lint:
     @echo "==> Running linter"
     python3 "{{root_dir}}/scripts/python/lint.py"
 
+# Start the REST API server
+api:
+    @echo "==> Starting ether-ocr API server"
+    python3 "{{root_dir}}/scripts/python/api.py"
+
 # ─── OCR tasks ────────────────────────────────────────────────
 
 # Run OCR on a PDF or image file

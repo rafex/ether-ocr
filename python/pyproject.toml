@@ -11,15 +11,22 @@ ocr = [
     "pdf2image>=1.17",
     "pillow>=10",
 ]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.18",
+]
 dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "black>=24",
     "isort>=5",
+    "httpx>=0.28",
 ]
 
 [project.scripts]
 ether-ocr = "ether_ocr.cli:main"
+ether-ocr-api = "ether_ocr.api.server:main"
 
 [build-system]
 requires = ["setuptools>=69"]
