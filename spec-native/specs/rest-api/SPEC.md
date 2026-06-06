@@ -3,10 +3,10 @@
 ## Metadata
 
 - ID: rest-api
-- Estado: active
+- Estado: done
 - Owner: rafex
 - Fecha de creacion: 2026-06-04
-- Ultima actualizacion: 2026-06-04
+- Ultima actualizacion: 2026-06-06
 
 ## Problema
 
