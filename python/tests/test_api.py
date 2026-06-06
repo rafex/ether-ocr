@@ -119,6 +119,59 @@ class TestOcrEndpoint(unittest.TestCase):
         self.assertIn("/api/v1/ocr", schema["paths"])
         self.assertIn("post", schema["paths"]["/api/v1/ocr"])
 
+    @patch("ether_ocr.api.routes.ocr.ocr_document")
+    def test_ocr_batch_multiple_files(self, mock_ocr):
+        from pathlib import Path
+
+        def make_result(*args, **kwargs):
+            return OcrPipelineResult(
+                input_path=Path("/tmp/t.txt"), output_path=Path("/tmp/t.txt"),
+                pages=1, paragraphs=1, size_bytes=10, used_ocr=False,
+                validation=ValidationResult(valid=True),
+            )
+        mock_ocr.side_effect = make_result
+
+        with patch.object(Path, "read_text", return_value="batch ok"):
+            with patch.object(Path, "unlink"):
+                files = [
+                    ("files", ("a.txt", io.BytesIO(b"a"), "text/plain")),
+                    ("files", ("b.txt", io.BytesIO(b"b"), "text/plain")),
+                ]
+                response = self.client.post(
+                    "/api/v1/ocr/batch",
+                    files=files,
+                    data={"validate": "false"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["total_files"], 2)
+        self.assertEqual(data["successful"], 2)
+        self.assertEqual(len(data["results"]), 2)
+
+    @patch("ether_ocr.api.routes.ocr.ocr_document")
+    def test_ocr_large_text_returns_tar_gz(self, mock_ocr):
+        from pathlib import Path
+
+        big_text = "x" * (101 * 1024)  # > 100 KB
+        mock_ocr.return_value = OcrPipelineResult(
+            input_path=Path("/tmp/t.txt"), output_path=Path("/tmp/t.txt"),
+            pages=1, paragraphs=1, size_bytes=len(big_text.encode("utf-8")),
+            used_ocr=False, validation=ValidationResult(valid=True),
+        )
+
+        with patch.object(Path, "read_text", return_value=big_text):
+            with patch.object(Path, "unlink"):
+                response = self.client.post(
+                    "/api/v1/ocr",
+                    files={"file": ("big.txt", io.BytesIO(big_text.encode()), "text/plain")},
+                    data={"validate": "false"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/gzip")
+        self.assertIn("attachment", response.headers["content-disposition"])
+
 
 class TestPrepareEndpoint(unittest.TestCase):
     @classmethod

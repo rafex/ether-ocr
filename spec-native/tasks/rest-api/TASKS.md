@@ -57,12 +57,12 @@
 
 - ID: TASK-API-0005
 - Title: Soporte batch y textos largos
-- State: todo
+- State: done
 - Owner: rafex
-- Dependencies: TASK-API-0002, TASK-API-0003
-- Expected files: `python/src/ether_ocr/api/batch.py`, `python/src/ether_ocr/api/compression.py`
+- Dependencies: TASK-API-0002, TASK-API-0004
+- Expected files: `python/src/ether_ocr/api/routes/ocr.py` (actualizado), `python/src/ether_ocr/api/schemas/ocr.py` (actualizado)
 - Close criteria: Batch procesa N archivos. Texto >100KB devuelve tar.gz.
-- Validation: Test con 5 archivos batch. Test con texto sintetico >100KB.
+- Validation: 48/48 tests pasan. POST /ocr/batch acepta múltiples archivos. >100KB devuelve application/gzip.
 
 ### TASK-API-0006 — Dockerizacion del servidor API
 

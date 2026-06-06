@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -48,3 +50,23 @@ class OcrLargeResponse(BaseModel):
     text_size_bytes: int = Field(description="Total size of extracted text in bytes")
     download_url: str = Field(description="URL to download the compressed text")
     metadata: OcrMetadata = Field(description="Processing metadata")
+
+
+class BatchFileResult(BaseModel):
+    """Result for a single file in a batch request."""
+
+    filename: str = Field(description="Original filename")
+    status: str = Field(description="'ok' or 'error'")
+    text: str = Field(default="", description="Extracted text (empty on error)")
+    error: str = Field(default="", description="Error message (empty on success)")
+    metadata: Optional[OcrMetadata] = Field(default=None, description="Processing metadata (null on error)")
+
+
+class BatchOcrResponse(BaseModel):
+    """Response for batch OCR requests."""
+
+    status: str = Field(default="ok")
+    total_files: int = Field(description="Total files submitted")
+    successful: int = Field(description="Number of files processed successfully")
+    failed: int = Field(description="Number of files that failed")
+    results: list[BatchFileResult] = Field(description="Per-file results")

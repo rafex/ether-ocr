@@ -7,12 +7,19 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette import status
 
 from ether_ocr.api.auth import AuthContext, require_auth
-from ether_ocr.api.schemas.ocr import OcrMetadata, OcrResponse
+from ether_ocr.api.schemas.ocr import (
+    BatchFileResult,
+    BatchOcrResponse,
+    OcrMetadata,
+    OcrResponse,
+)
 from ether_ocr.pipeline import ocr_document
 
 router = APIRouter(tags=["ocr"])
@@ -73,37 +80,16 @@ def _build_tar_gz(text: str, metadata: OcrMetadata, filename: str) -> io.BytesIO
     return buf
 
 
-@router.post(
-    "/ocr",
-    response_model=OcrResponse,
-    summary="Extract text from a document using OCR or direct extraction",
-    description=(
-        "Upload a PDF (with or without text layer) or image file. "
-        "The service automatically detects whether to use Poppler (fast, for PDFs "
-        "with text layer) or Tesseract OCR (for scanned PDFs and images). "
-        "Returns cleaned UTF-8 text with metadata. "
-        "For texts larger than 100 KB, returns a tar.gz file instead of inline text."
-    ),
-    responses={
-        200: {"description": "Text extracted successfully"},
-        400: {"description": "Invalid request (missing file, bad parameters)"},
-        413: {"description": "File too large"},
-        415: {"description": "Unsupported file format"},
-        422: {"description": "Text failed RAG validation"},
-    },
-)
-async def ocr_endpoint(
-    file: UploadFile = File(..., description="PDF or image file to process"),
-    lang: str = Form(default="spa+eng", description="Tesseract language(s)"),
-    dpi: int = Form(default=300, ge=72, le=600, description="DPI for PDF-to-image conversion"),
-    validate: bool = Form(default=True, description="Run RAG compatibility validation"),
-    force_image: bool = Form(default=False, description="Force image mode (skip PDF logic)"),
-    auth: AuthContext = Depends(require_auth),
+async def _process_single_file(
+    file: UploadFile,
+    lang: str,
+    dpi: int,
+    validate: bool,
+    force_image: bool,
 ) -> OcrResponse:
-    """Process an uploaded document through the OCR pipeline."""
+    """Process a single file through the OCR pipeline."""
     _validate_file(file)
 
-    # Read uploaded file into a temporary location
     suffix = Path(file.filename or "upload").suffix
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_input:
         content = await file.read()
@@ -131,22 +117,101 @@ async def ocr_endpoint(
         )
 
         text = result.output_path.read_text(encoding="utf-8")
-
-        # Clean up output file (input file cleaned in finally)
         result.output_path.unlink(missing_ok=True)
 
         return OcrResponse(status="ok", text=text, metadata=metadata)
 
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
-    except FileNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
     finally:
-        # Clean up temporary input file
         input_path.unlink(missing_ok=True)
+
+
+@router.post(
+    "/ocr",
+    summary="Extract text from a document using OCR or direct extraction",
+    description=(
+        "Upload a PDF (with or without text layer) or image file. "
+        "Returns cleaned UTF-8 text with metadata. "
+        "For texts larger than 100 KB, returns a tar.gz archive."
+    ),
+    responses={
+        200: {"description": "Text extracted successfully (JSON or tar.gz)"},
+        400: {"description": "Invalid request"},
+        401: {"description": "Authentication required"},
+        415: {"description": "Unsupported file format"},
+        422: {"description": "Text failed RAG validation"},
+    },
+)
+async def ocr_endpoint(
+    file: UploadFile = File(..., description="PDF or image file to process"),
+    lang: str = Form(default="spa+eng"),
+    dpi: int = Form(default=300, ge=72, le=600),
+    validate: bool = Form(default=True),
+    force_image: bool = Form(default=False),
+    auth: AuthContext = Depends(require_auth),
+):
+    """Process a single document through the OCR pipeline."""
+    try:
+        single = await _process_single_file(file, lang, dpi, validate, force_image)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    # ── Large text: return tar.gz ─────────────────────
+    if single.metadata.size_bytes > MAX_INLINE_BYTES:
+        stem = Path(file.filename or "output").stem
+        tar_buf = _build_tar_gz(single.text, single.metadata, stem)
+        return StreamingResponse(
+            tar_buf,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f'attachment; filename="{stem}.tar.gz"'},
+        )
+
+    return single
+
+
+@router.post(
+    "/ocr/batch",
+    response_model=BatchOcrResponse,
+    summary="Batch OCR — process multiple files at once",
+    description="Upload multiple files and process them through the OCR pipeline.",
+)
+async def ocr_batch_endpoint(
+    files: List[UploadFile] = File(..., description="Multiple files to process"),
+    lang: str = Form(default="spa+eng"),
+    dpi: int = Form(default=300, ge=72, le=600),
+    validate: bool = Form(default=True),
+    force_image: bool = Form(default=False),
+    auth: AuthContext = Depends(require_auth),
+) -> BatchOcrResponse:
+    """Process multiple documents through the OCR pipeline."""
+    results: list[BatchFileResult] = []
+    successful = 0
+    failed = 0
+
+    for batch_file in files:
+        try:
+            single = await _process_single_file(batch_file, lang, dpi, validate, force_image)
+            results.append(BatchFileResult(
+                filename=batch_file.filename or "unknown",
+                status="ok",
+                text=single.text,
+                metadata=single.metadata,
+            ))
+            successful += 1
+        except HTTPException:
+            raise
+        except Exception as exc:
+            results.append(BatchFileResult(
+                filename=batch_file.filename or "unknown",
+                status="error",
+                error=str(exc),
+            ))
+            failed += 1
+
+    return BatchOcrResponse(
+        total_files=len(files),
+        successful=successful,
+        failed=failed,
+        results=results,
+    )
