@@ -1,4 +1,15 @@
-# docker-compose.yml — Development environment for ether-ocr
+# docker-compose.yml — ether-ocr REST API service
+#
+# Usage:
+#   just docker-up          # Start the API server
+#   just docker-down        # Stop the API server
+#   just docker-logs        # View logs
+#
+# Environment variables (see .env.example):
+#   AUTH_ENABLED=1          # Enable authentication (1|0)
+#   API_KEYS=key1,key2      # Comma-separated valid API keys
+#   JWT_SECRET=secret       # Secret for JWT verification
+#   CORS_ORIGINS=*          # Allowed CORS origins
 
 version: "3.9"
 
@@ -8,19 +19,30 @@ services:
       context: ..
       dockerfile: containers/Dockerfile
     image: ether-ocr:latest
-    container_name: ether-ocr-dev
+    container_name: ether-ocr-api
+    ports:
+      - "${PORT:-8000}:8000"
     volumes:
-      # Mount source code for live development
-      - ../python:/workspace/python:ro
-      - ../scripts:/workspace/scripts:ro
-      # Data volumes
+      # Data volumes (read-only input, writable output)
       - ./data/input:/data/input:ro
       - ./data/output:/data/output
     environment:
       - PYTHONPATH=/workspace/python/src
       - TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+      # Auth configuration
+      - AUTH_ENABLED=${AUTH_ENABLED:-1}
+      - API_KEYS=${API_KEYS:-dev-key-ether-ocr}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8000
     working_dir: /workspace
-    # Override to keep container alive for development
-    command: ["tail", "-f", "/dev/null"]
-    stdin_open: true
-    tty: true
+    command: ["python3", "-m", "ether_ocr.api.server"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

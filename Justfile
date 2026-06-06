@@ -58,6 +58,11 @@ docker-run input output='ocr_output.txt':
     @echo "==> Running OCR in Docker container"
     bash "{{root_dir}}/scripts/shellscript/docker-run.sh" "{{input}}" "{{output}}"
 
+# Start API server with Docker Compose
+docker-api:
+    @echo "==> Starting ether-ocr API in Docker"
+    docker compose -f "{{root_dir}}/containers/docker-compose.yml" up -d
+
 # Push Docker image to registry
 docker-push:
     @echo "==> Pushing Docker image"

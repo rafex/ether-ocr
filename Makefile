@@ -5,7 +5,7 @@
 SHELL := /bin/bash
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
-.PHONY: help build test lint api docker-build docker-push clean
+.PHONY: help build test lint api docker-build docker-up docker-down docker-push clean
 
 # ─── Default target ───────────────────────────────────────────
 .DEFAULT_GOAL := help
@@ -51,6 +51,14 @@ ocr-image: ## Run OCR on an image (args: INPUT=scan.png OUTPUT=out.txt)
 docker-build: ## Build Docker image
 	@echo "==> Building Docker image"
 	bash "$(ROOT_DIR)/scripts/shellscript/docker-build.sh"
+
+docker-up: ## Start API server with Docker Compose
+	@echo "==> Starting ether-ocr API via Docker Compose"
+	docker compose -f "$(ROOT_DIR)/containers/docker-compose.yml" up -d
+
+docker-down: ## Stop Docker Compose services
+	@echo "==> Stopping ether-ocr API"
+	docker compose -f "$(ROOT_DIR)/containers/docker-compose.yml" down
 
 docker-push: ## Push Docker image to registry
 	@echo "==> Pushing Docker image"

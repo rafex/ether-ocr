@@ -45,6 +45,10 @@ COPY scripts/ ./scripts/
 # Create data directories
 RUN mkdir -p /data/input /data/output
 
+# Health check — verifies the API is responding
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
+
 # Default command: start the REST API server
 EXPOSE 8000
 CMD ["python3", "-m", "ether_ocr.api.server"]

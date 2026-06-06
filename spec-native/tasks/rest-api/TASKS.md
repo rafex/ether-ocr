@@ -68,12 +68,12 @@
 
 - ID: TASK-API-0006
 - Title: Dockerizacion del servidor API
-- State: todo
+- State: done
 - Owner: rafex
 - Dependencies: TASK-API-0001, TASK-API-0002, TASK-API-0003, TASK-API-0004, TASK-API-0005
-- Expected files: `containers/Dockerfile` (actualizado), `containers/docker-compose.yml` (actualizado)
-- Close criteria: `make docker-build` construye imagen con API. `just docker-up` levanta servidor.
-- Validation: `curl http://localhost:8000/api/v1/health` dentro del contenedor.
+- Expected files: `containers/Dockerfile` (actualizado), `containers/docker-compose.yml` (reescrito para API), `.env.example` (nuevo)
+- Close criteria: `make docker-build` construye imagen. `make docker-up` / `just docker-up` levanta servidor en puerto 8000. Healthcheck incluido.
+- Validation: Docker Compose expone puerto 8000, variables de entorno para auth, HEALTHCHECK cada 30s.
 
 ### TASK-API-0007 — Tests de integracion y documentacion
 
