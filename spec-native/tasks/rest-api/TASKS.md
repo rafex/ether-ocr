@@ -5,7 +5,7 @@
 - Iniciativa: rest-api
 - Spec relacionada: `spec-native/specs/rest-api/SPEC.md`
 - Owner: rafex
-- Estado general: todo
+- Estado general: done
 
 ## Tareas
 
@@ -79,9 +79,9 @@
 
 - ID: TASK-API-0007
 - Title: Tests de integracion y documentacion
-- State: todo
+- State: done
 - Owner: rafex
 - Dependencies: TASK-API-0006
-- Expected files: `python/tests/test_api.py`, `spec-native/ARCHITECTURE.md`, `spec-native/COMMANDS.md`, `README.md`
+- Expected files: `python/tests/test_api.py`, `spec-native/ARCHITECTURE.md`, `spec-native/COMMANDS.md`, `.env.example`
 - Close criteria: Tests de integracion cubren todos los endpoints. Documentacion actualizada.
-- Validation: `make test-api`, revision documental.
+- Validation: 48/48 tests pasan (26 API + 22 unitarios). ARCHITECTURE.md y COMMANDS.md actualizados con capa API.

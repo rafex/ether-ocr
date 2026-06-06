@@ -2,97 +2,99 @@
 
 Describe la arquitectura actual del proyecto.
 
-## Debe responder
+## Vision general
 
-- Cuales son los modulos o bounded contexts principales.
-- Que responsabilidad tiene cada modulo.
-- Donde estan los limites entre capas.
-- Que dependencias estan permitidas o prohibidas.
-- Cuales son los puntos de integracion externos.
+`ether-ocr` es un servicio de extraccion de texto que expone una API REST
+para que agentes externos y pipelines RAG consuman texto UTF-8 limpio desde
+documentos heterogeneos (PDFs con/sin capa de texto, imagenes, texto plano).
 
-## Arquitectura actual
-
-### Vision general
-
-`ether-ocr` prepara documentos para alimentar un RAG externo que solo
-acepta texto plano UTF-8. La primera implementacion vive en Python bajo
-`python/src` y separa la extraccion PDF, limpieza de texto, validacion
-de formato plano y CLI.
-
-El sistema no sube documentos al RAG. Su salida es un `.txt` limpio que
-puede enviarse despues al backend de `/Users/rafex/repository/github/rafex/faiss-poc`.
+El sistema **no** inserta datos en ningun RAG — solo extrae, limpia y
+devuelve texto. Un agente externo se encarga de la ingestion.
 
 ## Modulos principales
 
-- `ether_ocr.extractor`: invoca `pdftotext -layout` para convertir PDFs
+### Capa de dominio (extraccion y limpieza)
+
+- **`ether_ocr.extractor`**: invoca `pdftotext -layout` para convertir PDFs
   con capa de texto a texto crudo.
-- `ether_ocr.ocr`: motor OCR con Tesseract para PDFs escaneados e imagenes.
-  Soporta `ocr_image()` para imagenes y `ocr_pdf_scanned()` para PDFs via
-  `pdf2image` + Poppler.
-- `ether_ocr.pipeline`: orquesta extraccion Poppler o OCR segun el tipo
+- **`ether_ocr.ocr`**: motor OCR con Tesseract para PDFs escaneados e imagenes.
+  Soporta `ocr_image()` y `ocr_pdf_scanned()` via `pdf2image` + Poppler.
+- **`ether_ocr.pipeline`**: orquesta extraccion Poppler o OCR segun el tipo
   de entrada. Decide automaticamente si el PDF tiene capa de texto o
   requiere OCR.
-- `ether_ocr.cleaner`: normaliza artefactos de layout PDF, numeracion
+- **`ether_ocr.cleaner`**: normaliza artefactos de layout PDF, numeracion
   de pagina, espacios repetidos y separadores de articulos/secciones.
-- `ether_ocr.validator`: rechaza Markdown, HTML y caracteres de control
-  para alinear la salida con el validador del RAG.
-- `ether_ocr.preparer`: orquesta entrada, limpieza, validacion y escritura
-  del archivo final.
-- `ether_ocr.cli`: expone comandos `prepare`, `clean`, `validate` y `ocr`.
-## Flujo principal
+- **`ether_ocr.validator`**: rechaza Markdown, HTML y caracteres de control.
+- **`ether_ocr.preparer`**: orquesta entrada, limpieza, validacion y escritura.
 
-1. Recibir ruta de entrada `.pdf`, imagen (`.png`, `.jpg`, `.tiff`) o texto UTF-8.
-2. Si es imagen, ejecutar OCR directo con Tesseract.
-3. Si es PDF:
-   a. Intentar extraccion de texto con Poppler (`pdftotext -layout`).
-   b. Si el texto extraido es insuficiente (<10 chars), verificar capa de texto.
-   c. Si no tiene capa de texto, convertir paginas a imagenes y ejecutar OCR.
-4. Limpiar artefactos de layout.
-5. Validar texto plano compatible con RAG.
-6. Escribir archivo `.txt` UTF-8.
-### Restricciones
+### Capa de API (REST)
 
-- Los PDFs escaneados sin capa de texto estan fuera de alcance por ahora.
-- No acoplar esta herramienta al API de subida del RAG.
-- Mantener codigo Python en `python/src`; si aparece Rust, usar
-  `rust/src`.
+- **`ether_ocr.api.server`**: factory `create_app()` que construye la app
+  FastAPI con CORS, routers y documentacion OpenAPI automatica.
+- **`ether_ocr.api.routes.health`**: `GET /api/v1/health` — health check
+  publico sin autenticacion.
+- **`ether_ocr.api.routes.ocr`**: `POST /api/v1/ocr` — OCR/extraccion de
+  un archivo. `POST /api/v1/ocr/batch` — procesamiento por lotes.
+  Textos >100KB se devuelven como `tar.gz` via StreamingResponse.
+- **`ether_ocr.api.routes.prepare`**: `POST /api/v1/prepare` y
+  `POST /api/v1/validate` — preparacion y validacion de texto.
+- **`ether_ocr.api.auth`**: modulo de autenticacion con soporte dual:
+  API key (`X-API-Key`) y JWT (`Authorization: Bearer`). Desactivable
+  con `AUTH_ENABLED=0` para desarrollo.
+- **`ether_ocr.api.schemas`**: modelos Pydantic v2 para request/response
+  de todos los endpoints.
 
-### Riesgos
+## Endpoints
 
-- PDF sin capa de texto: la salida puede estar vacia. Mitigacion futura:
-  incorporar OCR explicitamente como nueva iniciativa.
-- Falsos positivos del validador: Markdown tecnico legitimo puede ser
-  rechazado. Mitigacion: permitir `--skip-validation` solo para casos
-  revisados manualmente.
+| Metodo | Ruta | Auth | Descripcion |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/health` | No | Health check del servicio |
+| `POST` | `/api/v1/ocr` | Si | OCR/extraccion de un archivo |
+| `POST` | `/api/v1/ocr/batch` | Si | OCR batch (multiple archivos) |
+| `POST` | `/api/v1/prepare` | Si | Preparar documento como texto limpio |
+| `POST` | `/api/v1/validate` | Si | Validar compatibilidad RAG |
+| `GET` | `/docs` | No | Swagger UI (OpenAPI) |
+| `GET` | `/redoc` | No | ReDoc (OpenAPI) |
+| `GET` | `/openapi.json` | No | Esquema OpenAPI |
+
+## Flujo principal (API)
+
+1. Cliente envia `POST /api/v1/ocr` con archivo (multipart/form-data).
+2. Middleware de auth verifica `X-API-Key` o JWT (si `AUTH_ENABLED=1`).
+3. El endpoint valida tipo MIME y extension.
+4. `pipeline.ocr_document()` decide automaticamente:
+   - PDF con capa de texto → Poppler (`pdftotext`)
+   - PDF escaneado → `pdf2image` + Tesseract OCR
+   - Imagen → Tesseract OCR directo
+   - Texto plano → passthrough con limpieza
+5. Si `validate=true`, se ejecuta `validator.validate_plain_text()`.
+6. Respuesta JSON con `{status, text, metadata}` o tar.gz si >100KB.
 
 ## Orquestacion
 
-El proyecto usa un sistema de orquestacion en dos capas:
-
-- **Makefile** (build): orquesta construccion, tests, lint y operaciones
-  Docker. Delega a scripts en `scripts/python/`, `scripts/shellscript/` y
-  `scripts/mk/`. No contiene logica inline.
-- **Justfile** (tasks): task runner para desarrollo diario. Orquesta OCR,
-  Docker y utilidades. Importa modulos de `scripts/just/` y delega a
-  `scripts/python/`.
-
-### Estructura de scripts
-
-```
-scripts/
-├── python/          ← Scripts Python (build, test, ocr, lint)
-├── shellscript/     ← Shell scripts (docker-build, docker-run, setup)
-├── mk/              ← Includes reusables de Make (docker.mk)
-└── just/            ← Includes reusables de Just (dev.just, docker.just)
-```
+- **Makefile** (build): construccion, tests, lint, Docker, API.
+- **Justfile** (tasks): OCR, Docker, API, utilidades.
 
 ## Contenedores
 
-El sistema esta disenado para ejecutarse en contenedores Docker:
+- `containers/Dockerfile`: multi-stage (`python:3.11-slim`), Poppler,
+  Tesseract (spa+eng), FastAPI + uvicorn. HEALTHCHECK cada 30s.
+- `containers/docker-compose.yml`: servicio API en puerto 8000, variables
+  de entorno para auth, healthcheck integrado.
+- `.env.example`: configuracion de auth, server y OCR.
 
-- `containers/Dockerfile`: multi-stage con `python:3.11-slim`, Poppler y
-  Tesseract OCR (espanol + ingles).
-- `containers/docker-compose.yml`: entorno de desarrollo con volumenes
-  para codigo fuente y datos.
-- Todas las dependencias de sistema (Poppler, Tesseract) se instalan en
-  la imagen — no se requieren en el host.
+## Dependencias entre capas
+
+```
+api/routes/ → api/schemas/ → (ninguna dependencia externa)
+api/routes/ → pipeline, preparer, validator (capa de dominio)
+api/auth.py → (solo FastAPI + stdlib)
+pipeline → extractor, ocr, cleaner, validator
+```
+
+## Restricciones
+
+- La capa `api/` depende de la capa de dominio, nunca al reves.
+- Los PDFs escaneados requieren Tesseract instalado en el sistema.
+- No acoplar esta herramienta al API de ingestion del RAG.
+- Textos >100KB se devuelven comprimidos — no saturar respuestas HTTP.

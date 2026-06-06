@@ -2,130 +2,118 @@
 
 Lista de comandos operativos del proyecto.
 
-## Objetivo
-
-Reducir la ambiguedad de ejecucion para agentes y humanos.
-
-## Comandos actuales
-
-### Setup
+## Setup
 
 ```bash
 # Instalar dependencias del sistema (macOS/Debian/Fedora/Alpine)
 bash scripts/shellscript/setup.sh
 
-# O solo Python + deps opcionales
-python3 -m pip install -e 'python[ocr]'
+# Python + deps OCR y API
+python3 -m pip install -e 'python[ocr,api]'
+
+# Solo deps de API
+python3 -m pip install -e 'python[api]'
 ```
 
-### Desarrollo
+## Desarrollo
 
 ```bash
-# Ayuda de Make (build orchestrator)
+# Ayuda de Make
 make help
 
-# Ayuda de Just (task runner)
+# Ayuda de Just
 just --list
-
-# CLI Python
-PYTHONPATH=python/src python3 -m ether_ocr --help
 ```
 
-### OCR
+## API REST
 
 ```bash
-# OCR de imagen
-make ocr-image INPUT=escaneo.png OUTPUT=salida.txt
+# Iniciar servidor en local (http://localhost:8000)
+make api
+# o
+just api
+# o
+python3 -m ether_ocr.api.server
 
-# OCR con Just
-just ocr documento.pdf salida.txt
+# Health check
+curl http://localhost:8000/api/v1/health
 
-# OCR dentro del contenedor Docker
-just docker-ocr escaneo.pdf salida.txt
+# OpenAPI docs
+open http://localhost:8000/docs
+
+# OCR via API (con autenticacion)
+curl -X POST http://localhost:8000/api/v1/ocr \
+  -H "X-API-Key: dev-key-ether-ocr" \
+  -F "file=@documento.pdf" \
+  -F "lang=spa+eng"
+
+# OCR batch
+curl -X POST http://localhost:8000/api/v1/ocr/batch \
+  -H "X-API-Key: dev-key-ether-ocr" \
+  -F "files=@doc1.pdf" \
+  -F "files=@doc2.pdf"
 ```
 
-### Tests
+## OCR CLI
+
+```bash
+# OCR directo (sin API)
+just ocr documento.pdf salida.txt
+make ocr INPUT=documento.pdf OUTPUT=salida.txt
+```
+
+## Tests
 
 ```bash
 # Todos los tests
 make test
-
-# Solo tests unitarios
+# o
 PYTHONPATH=python/src python3 -m unittest discover -s python/tests
 ```
 
-### Lint y formato
+## Lint y formato
 
 ```bash
 make lint
-
-# Solo formateo
-just format
+just lint
 ```
 
-### Build y Docker
+## Docker
 
 ```bash
-# Build de la imagen Docker
+# Build de la imagen
 make docker-build
+just docker-build
 
-# Ejecutar OCR en contenedor
-just docker-run entrada.pdf salida.txt
+# Iniciar API en Docker (puerto 8000)
+make docker-up
+just docker-api
+
+# Detener servicios
+make docker-down
+just docker-down
+
+# Logs del contenedor
+just docker-logs
 
 # Shell interactivo en contenedor
 make docker-shell
+just docker-shell
+
+# OCR dentro del contenedor
+just docker-ocr entrada.pdf salida.txt
 ```
 
-### Utilidad
+## Utilidad
 
 ```bash
+# Preparar documento
 PYTHONPATH=python/src python3 -m ether_ocr prepare entrada.pdf salida.txt
-PYTHONPATH=python/src python3 -m ether_ocr ocr escaneado.pdf salida.txt
-PYTHONPATH=python/src python3 -m ether_ocr validate salida.txt
+
+# Validar texto
+PYTHONPATH=python/src python3 -m ether_ocr validate texto.txt
+
+# Limpiar build artifacts
 make clean
 just clean
-```
-### Setup
-
-```bash
-# PDFs en macOS
-brew install poppler
-
-# PDFs en Debian/Ubuntu
-sudo apt install poppler-utils
-
-# instalacion editable opcional
-python3 -m pip install -e python
-```
-
-### Desarrollo
-
-```bash
-PYTHONPATH=python/src python3 -m ether_ocr --help
-```
-
-### Tests
-
-```bash
-PYTHONPATH=python/src python3 -m unittest discover -s python/tests
-```
-
-### Lint y formato
-
-```bash
-# no configurado todavia
-```
-
-### Build
-
-```bash
-# no configurado todavia
-```
-
-### Utilidad
-
-```bash
-PYTHONPATH=python/src python3 -m ether_ocr prepare entrada.pdf salida.txt
-PYTHONPATH=python/src python3 -m ether_ocr clean reglamento_raw.txt reglamento_limpio.txt
-PYTHONPATH=python/src python3 -m ether_ocr validate reglamento_limpio.txt
 ```
