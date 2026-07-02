@@ -26,8 +26,8 @@ services:
       - "${PORT:-8000}:8000"
       - "${MCP_PORT:-9001}:9001"
     volumes:
-      - ./data/input:/data/input:ro
-      - ./data/output:/data/output
+      - ether-ocr-input:/data/input:ro
+      - ether-ocr-output:/data/output
     environment:
       - PYTHONPATH=/workspace/python/ether-api-ocr/src:/workspace/python/ether-core-ocr/src
       - TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
@@ -55,3 +55,7 @@ services:
     working_dir: /workspace
     command: ["bash", "scripts/shellscript/entrypoint.sh"]
     restart: unless-stopped
+
+volumes:
+  ether-ocr-input:
+  ether-ocr-output:

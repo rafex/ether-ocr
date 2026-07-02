@@ -32,6 +32,9 @@ Thumbs.db
 !tests/sample.pdf
 python/requirements.txt
 
+# Environment (local, no versionar)
+.env
+
 # Docker compose data (local, no versionar)
 containers/data/input/*
 containers/data/output/*
