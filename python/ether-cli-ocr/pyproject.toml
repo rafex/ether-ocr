@@ -1,0 +1,18 @@
+[project]
+name = "ether-cli-ocr"
+version = "0.3.0"
+description = "CLI for ether-ocr — document preparation and OCR."
+requires-python = ">=3.11"
+dependencies = [
+    "ether-core-ocr",
+]
+
+[project.scripts]
+ether-ocr = "ether_ocr_cli.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

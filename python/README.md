@@ -1,32 +1,27 @@
-# ether-ocr Python
+# python/ — Ether OCR packages
 
-Herramienta para preparar documentos PDF o texto crudo como texto plano
-UTF-8 compatible con el RAG de `faiss-poc`.
+Cuatro paquetes Python con gestion UV independiente:
 
-## Requisitos
+| Paquete | Descripcion |
+|---|---|
+| `ether-core-ocr/` | Motor OCR y dominio compartido (pipeline, extractor, limpieza, validacion) |
+| `ether-api-ocr/` | API REST con FastAPI |
+| `ether-cli-ocr/` | CLI para OCR desde terminal |
+| `ether-mcp-ocr/` | MCP Server para exponer OCR a LLMs (Claude, Cursor, etc.) |
 
-- Python 3.11+
-- Poppler para procesar PDFs:
-  - macOS: `brew install poppler`
-  - Debian/Ubuntu: `sudo apt install poppler-utils`
-
-## Uso sin instalar
-
-```bash
-PYTHONPATH=python/src python3 -m ether_ocr prepare entrada.pdf salida.txt
-PYTHONPATH=python/src python3 -m ether_ocr clean reglamento_raw.txt reglamento_limpio.txt
-PYTHONPATH=python/src python3 -m ether_ocr validate reglamento_limpio.txt
-```
-
-## Uso instalado
+## Instalacion
 
 ```bash
-python3 -m pip install -e python
-ether-ocr prepare entrada.pdf salida.txt
+pip install -e python/ether-core-ocr/
+pip install -e python/ether-api-ocr/
+pip install -e python/ether-cli-ocr/
+pip install -e python/ether-mcp-ocr/
 ```
 
-## Tests
+## Entry points
 
-```bash
-PYTHONPATH=python/src python3 -m unittest discover -s python/tests
-```
+| Comando | Paquete |
+|---|---|
+| `ether-ocr` | CLI |
+| `ether-ocr-api` | API server |
+| `ether-ocr-mcp` | MCP server |

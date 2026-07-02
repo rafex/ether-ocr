@@ -1,17 +1,19 @@
-# docker-compose.yml — ether-ocr REST API service
+# docker-compose.yml — ether-ocr REST API + MCP services
 #
 # Usage:
-#   just docker-up          # Start the API server
-#   just docker-down        # Stop the API server
-#   just docker-logs        # View logs
+#   docker compose up -d      # Start API + MCP
+#   docker compose down        # Stop services
+#   docker compose logs -f     # View logs
 #
 # Environment variables (see .env.example):
-#   AUTH_ENABLED=1          # Enable authentication (1|0)
-#   API_KEYS=key1,key2      # Comma-separated valid API keys
-#   JWT_SECRET=secret       # Secret for JWT verification
-#   CORS_ORIGINS=*          # Allowed CORS origins
-
-version: "3.9"
+#   AUTH_ENABLED=1            # Enable authentication (1|0)
+#   API_KEYS=key1,key2        # Comma-separated valid API keys
+#   JWT_SECRET=secret         # Secret for JWT verification
+#   CORS_ORIGINS=origins      # Comma-separated allowed origins
+#   MAX_UPLOAD_BYTES=52428800 # Max upload size in bytes (50 MB)
+#   RATE_LIMIT_REQUESTS=30    # Max requests per IP per window
+#   MCP_TRANSPORT=http        # MCP transport: stdio | http
+#   MCP_PORT=9001             # MCP HTTP port
 
 services:
   ether-ocr:
@@ -22,27 +24,34 @@ services:
     container_name: ether-ocr-api
     ports:
       - "${PORT:-8000}:8000"
+      - "${MCP_PORT:-9001}:9001"
     volumes:
-      # Data volumes (read-only input, writable output)
       - ./data/input:/data/input:ro
       - ./data/output:/data/output
     environment:
-      - PYTHONPATH=/workspace/python/src
+      - PYTHONPATH=/workspace/python/ether-api-ocr/src:/workspace/python/ether-core-ocr/src
       - TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
-      # Auth configuration
+      # Auth
       - AUTH_ENABLED=${AUTH_ENABLED:-1}
       - API_KEYS=${API_KEYS:-dev-key-ether-ocr}
       - JWT_SECRET=${JWT_SECRET:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
-      # Server configuration
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8000}
+      # Server
       - HOST=0.0.0.0
       - PORT=8000
+      # Security
+      - MAX_UPLOAD_BYTES=${MAX_UPLOAD_BYTES:-52428800}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-1}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-30}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+      # OCR
+      - OCR_DEFAULT_LANG=${OCR_DEFAULT_LANG:-spa+eng}
+      - OCR_DEFAULT_DPI=${OCR_DEFAULT_DPI:-300}
+      - OCR_MAX_INLINE_BYTES=${OCR_MAX_INLINE_BYTES:-102400}
+      # MCP
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-http}
+      - MCP_PORT=${MCP_PORT:-9001}
     working_dir: /workspace
-    command: ["python3", "-m", "ether_ocr.api.server"]
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    command: ["bash", "scripts/shellscript/entrypoint.sh"]
     restart: unless-stopped

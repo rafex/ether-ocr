@@ -4,15 +4,10 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parents[2]
-    src_dir = repo_root / "python" / "src"
-    sys.path.insert(0, str(src_dir))
-
-    from ether_ocr.api.server import main as run_server
+    from ether_ocr_api.server import main as run_server
 
     run_server()
     return 0

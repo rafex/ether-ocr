@@ -12,3 +12,48 @@
 .opencode/node_modules/
 session-ses_*.md
 *.egg-info/
+
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+*.pdf
+!tests/sample.pdf
+python/requirements.txt
+
+# Docker compose data (local, no versionar)
+containers/data/input/*
+containers/data/output/*
+!containers/data/input/.gitkeep
+!containers/data/output/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# opencode (local, no versionar)
+.opencode/sessions.db
+.opencode/sessions*db
+.opencode/sessions.db-shm
+.opencode/sessions.db-wal
+.opencode/worktrees/
+.opencode/worktrees.db
+.opencode/worktrees.log
+.opencode/node_modules/
+.agents/
+agents/
+session-ses_*.md
+
+# SpecNative
+.specnative/.venv/

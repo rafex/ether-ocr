@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# docker-run.sh — Run ether-ocr inside a Docker container
+# docker-run.sh — Run ether-ocr CLI inside a Docker container
+# Uses stdin/stdout for file transfer — works with local and remote Docker/Podman.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 IMAGE_NAME="${DOCKER_IMAGE:-ether-ocr}"
 IMAGE_TAG="${DOCKER_TAG:-latest}"
 
@@ -19,19 +18,40 @@ if [ -z "$INPUT" ]; then
   exit 1
 fi
 
-INPUT_ABS="$(realpath "$INPUT")"
+INPUT_ABS="$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$INPUT")"
 INPUT_NAME="$(basename "$INPUT_ABS")"
-INPUT_DIR="$(dirname "$INPUT_ABS")"
+INPUT_EXT="${INPUT_NAME##*.}"
 
 echo "==> Running OCR in Docker container"
 echo "    Input:  ${INPUT_ABS}"
 echo "    Output: ${OUTPUT}"
 echo "    Image:  ${IMAGE_NAME}:${IMAGE_TAG}"
 
-docker run --rm \
-  -v "${INPUT_DIR}:/data/input:ro" \
-  -v "${ROOT_DIR}:/data/output" \
+cat "$INPUT_ABS" | docker run --rm -i \
   "${IMAGE_NAME}:${IMAGE_TAG}" \
-  python3 -m ether_ocr ocr "/data/input/${INPUT_NAME}" "/data/output/${OUTPUT}"
+  python3 -c "
+import sys, tempfile
+from pathlib import Path
+from ether_ocr_core.pipeline import ocr_document
 
-echo "==> OCR complete. Output: ${ROOT_DIR}/${OUTPUT}"
+data = sys.stdin.buffer.read()
+
+with tempfile.NamedTemporaryFile(suffix='.${INPUT_EXT}', delete=False) as tmp:
+    tmp.write(data)
+    tmp_path = tmp.name
+
+out_path = Path('/tmp/ocr_output.txt')
+
+try:
+    result = ocr_document(Path(tmp_path), out_path)
+    print(f'Pages: {result.pages}', file=sys.stderr)
+    print(f'Paragraphs: {result.paragraphs}', file=sys.stderr)
+    print(f'Size: {result.size_bytes / 1024:.1f} KB', file=sys.stderr)
+    print(f'OCR used: {\"yes\" if result.used_ocr else \"no\"}', file=sys.stderr)
+    sys.stdout.write(out_path.read_text(encoding='utf-8'))
+finally:
+    Path(tmp_path).unlink(missing_ok=True)
+    out_path.unlink(missing_ok=True)
+" > "$OUTPUT"
+
+echo "==> OCR complete. Output: ${OUTPUT}"

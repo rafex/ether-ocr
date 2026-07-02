@@ -1,7 +1,5 @@
 # docker.just — Docker tasks imported by root Justfile
 
-root_dir := justfile_directory() / ".." / ".."
-
 # Run OCR inside Docker container
 docker-ocr input output='ocr_output.txt':
     @echo "==> Running OCR in Docker on {{input}} -> {{output}}"

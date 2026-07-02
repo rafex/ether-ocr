@@ -1,0 +1,19 @@
+[project]
+name = "ether-mcp-ocr"
+version = "0.1.0"
+description = "MCP Server for ether-ocr — exposes OCR capabilities to LLMs."
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.27,<2",
+    "httpx>=0.28",
+]
+
+[project.scripts]
+ether-ocr-mcp = "ether_ocr_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

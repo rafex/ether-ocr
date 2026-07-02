@@ -1,0 +1,22 @@
+[project]
+name = "ether-api-ocr"
+version = "0.3.0"
+description = "REST API for ether-ocr — FastAPI server."
+requires-python = ">=3.11"
+dependencies = [
+    "ether-core-ocr",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.18",
+    "PyJWT>=2.9",
+]
+
+[project.scripts]
+ether-ocr-api = "ether_ocr_api.server:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
