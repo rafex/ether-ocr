@@ -1,0 +1,269 @@
+openapi: 3.0.3
+info:
+  title: ether-ocr MCP Server
+  description: |
+    Model Context Protocol (MCP) server for ether-ocr.
+
+    Exposes OCR capabilities to LLMs (Claude Desktop, Cursor, etc.) via
+    MCP protocol over HTTP/SSE transport. The server bridges MCP tool
+    calls to the ether-ocr REST API.
+
+    ## Transport
+
+    | Transport | Usage |
+    |---|---|
+    | `stdio` | Claude Desktop, Cursor (same machine) |
+    | `http` | Remote clients via HTTP/SSE (this spec) |
+
+    ## Protocol
+
+    The MCP server uses JSON-RPC 2.0 over Server-Sent Events (SSE).
+    Clients connect to `/sse` to establish a session and receive an
+    endpoint for posting messages.
+
+    ### Flow
+    1. **GET `/sse`** — establish SSE connection, receive session endpoint
+    2. **POST `/messages/?session_id=...`** — send JSON-RPC requests
+    3. Server sends JSON-RPC responses via SSE stream
+  version: 0.1.0
+  contact:
+    name: rafex
+    url: https://github.com/rafex/ether-ocr
+
+servers:
+  - url: http://localhost:9001
+    description: Local MCP server
+  - url: http://bastion:9011
+    description: Podman deployment (bastion)
+
+tags:
+  - name: mcp
+    description: MCP protocol endpoints
+
+paths:
+  /sse:
+    get:
+      tags:
+        - mcp
+      summary: Establish MCP SSE session
+      description: |
+        Connect to the MCP server via Server-Sent Events. Returns an
+        `endpoint` event with the URL path for posting JSON-RPC messages.
+
+        The client should:
+        1. Open an SSE connection to this endpoint
+        2. Read the `endpoint` event to get the message URL
+        3. Send JSON-RPC messages via POST to that URL
+      operationId: mcp_sse_connect
+      responses:
+        "200":
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                event: endpoint
+                data: /messages/?session_id=589b30424a8e4e11b063199982640db6
+
+  /messages/:
+    post:
+      tags:
+        - mcp
+      summary: Send JSON-RPC message
+      description: |
+        Post a JSON-RPC 2.0 request to the server. The session ID is
+        passed as a query parameter.
+
+        Standard MCP methods:
+        - `tools/list` — list available tools
+        - `tools/call` — invoke a specific tool
+        - `initialize` — initialize MCP session
+      operationId: mcp_post_message
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Session ID from the SSE `endpoint` event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - jsonrpc
+                - id
+                - method
+              properties:
+                jsonrpc:
+                  type: string
+                  enum: ["2.0"]
+                id:
+                  type: integer
+                  description: Request ID
+                method:
+                  type: string
+                  description: MCP method name
+                  enum:
+                    - tools/list
+                    - tools/call
+                    - initialize
+                    - notifications/initialized
+                params:
+                  type: object
+                  description: Method-specific parameters
+            examples:
+              list_tools:
+                summary: List available tools
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: "tools/list"
+              call_tool:
+                summary: Call health_check tool
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: "tools/call"
+                  params:
+                    name: "health_check"
+                    arguments: {}
+      responses:
+        "200":
+          description: JSON-RPC response (delivered via SSE, not HTTP response body)
+        "400":
+          description: Invalid session or malformed request
+
+components:
+  schemas:
+    MCPTool:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        inputSchema:
+          type: object
+          description: JSON Schema for tool arguments
+
+  # ─── MCP Tools reference (not standard OpenAPI, informational) ───
+
+x-mcp-tools:
+  health_check:
+    name: health_check
+    description: Verify the ether-ocr API is healthy and responding.
+    inputSchema:
+      type: object
+      properties: {}
+
+  ocr_document:
+    name: ocr_document
+    description: |
+      Extract text from a PDF or image file using OCR.
+      The file must be provided as a base64-encoded string.
+      Returns cleaned UTF-8 text with metadata.
+    inputSchema:
+      type: object
+      required:
+        - file_base64
+        - filename
+      properties:
+        file_base64:
+          type: string
+          description: Base64-encoded file content
+        filename:
+          type: string
+          description: Original filename with extension
+        lang:
+          type: string
+          description: Tesseract language(s)
+          default: "spa+eng"
+        dpi:
+          type: integer
+          description: DPI for PDF-to-image conversion
+          default: 300
+        validate:
+          type: boolean
+          description: Run RAG validation
+          default: true
+        force_image:
+          type: boolean
+          description: Force Tesseract OCR on all pages
+          default: false
+
+  batch_ocr:
+    name: batch_ocr
+    description: Process multiple files through the OCR pipeline at once.
+    inputSchema:
+      type: object
+      required:
+        - files
+      properties:
+        files:
+          type: array
+          description: List of files to process
+          items:
+            type: object
+            required:
+              - base64
+              - filename
+            properties:
+              base64:
+                type: string
+                description: Base64-encoded file content
+              filename:
+                type: string
+                description: Original filename with extension
+        lang:
+          type: string
+          default: "spa+eng"
+        dpi:
+          type: integer
+          default: 300
+
+  validate_text:
+    name: validate_text
+    description: Validate a text string for RAG compatibility.
+    inputSchema:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: Text to validate
+
+  # ─── Claude Desktop configuration example ───
+
+x-claude-desktop-config:
+  mcpServers:
+    ether-ocr:
+      command: "python3"
+      args:
+        - "-m"
+        - "ether_ocr_mcp.server"
+        - "--transport"
+        - "stdio"
+      env:
+        OCR_API_URL: "http://localhost:8000"
+
+x-environment-variables:
+  MCP_TRANSPORT:
+    default: "stdio"
+    description: Transport protocol — `stdio` or `http`
+  MCP_PORT:
+    default: "9001"
+    description: HTTP port when transport is `http`
+  OCR_API_URL:
+    default: "http://localhost:8000"
+    description: URL of the ether-ocr REST API
+  OCR_API_KEY:
+    default: ""
+    description: API key for the REST API (optional)
+  OCR_API_TIMEOUT:
+    default: "60"
+    description: Timeout in seconds for REST API calls

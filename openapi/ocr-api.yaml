@@ -1,0 +1,564 @@
+openapi: 3.0.3
+info:
+  title: ether-ocr API
+  description: |
+    OCR engine and document preparation API for RAG ingestion.
+
+    Converts PDFs (with or without text layer) and images to UTF-8 plain text
+    ready for LLM and RAG pipelines. Supports Tesseract OCR for scanned documents
+    and Poppler (pdftotext) for direct text extraction.
+
+    ## Authentication
+
+    All endpoints except `/api/v1/health` require authentication via:
+
+    - **API Key**: `X-API-Key: <key>` header (recommended for agents/pipelines)
+    - **JWT Bearer**: `Authorization: Bearer <token>` header
+
+    Set `AUTH_ENABLED=0` to disable authentication for local development.
+
+    ## Response for large texts
+
+    When extracted text exceeds `OCR_MAX_INLINE_BYTES` (default 100 KB),
+    the response is `application/gzip` with a `tar.gz` containing
+    `<filename>.txt` and `<filename>.metadata.json`.
+
+    ## Rate limiting
+
+    Default: 30 requests per 60 seconds per IP. Configurable via
+    `RATE_LIMIT_REQUESTS` and `RATE_LIMIT_WINDOW_SECONDS`.
+  version: 0.3.0
+  contact:
+    name: rafex
+    url: https://github.com/rafex/ether-ocr
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: http://bastion:8001
+    description: Podman deployment (bastion)
+
+tags:
+  - name: health
+    description: Service health and status
+  - name: ocr
+    description: OCR text extraction from documents
+  - name: prepare
+    description: Document preparation and text validation
+
+paths:
+  /api/v1/health:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: Returns service health status and version. No authentication required.
+      operationId: health_check
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "ok"
+                version: "0.3.0"
+                service: "ether-ocr"
+
+  /api/v1/ocr:
+    post:
+      tags:
+        - ocr
+      summary: Extract text from a document
+      description: |
+        Process a PDF or image file and return extracted UTF-8 text.
+
+        **Supported formats:** PDF (with or without text layer), PNG, JPEG, TIFF, TXT.
+
+        **Pipeline:**
+        1. If `force_image=true` → Tesseract OCR on all pages
+        2. If `.txt` → clean and validate, no OCR
+        3. If `.pdf` → try `pdftotext`. If result is empty → OCR via pdf2image + Tesseract
+        4. If image → Tesseract OCR directly
+
+        The response is JSON for texts ≤ `OCR_MAX_INLINE_BYTES`.
+        For larger texts, returns `application/gzip` with a `tar.gz` archive.
+      operationId: ocr_endpoint
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF or image file to process
+                lang:
+                  type: string
+                  description: Tesseract language code (e.g. `spa+eng`, `eng`, `fra`)
+                  default: "spa+eng"
+                dpi:
+                  type: integer
+                  description: DPI for PDF-to-image rasterization
+                  minimum: 72
+                  maximum: 600
+                  default: 300
+                validate:
+                  type: boolean
+                  description: Run RAG compatibility validation on output
+                  default: true
+                force_image:
+                  type: boolean
+                  description: Force OCR on all pages (ignore embedded text layer)
+                  default: false
+      responses:
+        "200":
+          description: Text extracted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrResponse"
+              example:
+                status: "ok"
+                text: "Artículo 1. Todo individuo tiene derecho..."
+                metadata:
+                  pages: 3
+                  paragraphs: 42
+                  size_bytes: 12345
+                  ocr_used: true
+                  method: "tesseract"
+                  language: "spa+eng"
+                  dpi: 300
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+              description: tar.gz with text and metadata when result > 100 KB
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/ocr/batch:
+    post:
+      tags:
+        - ocr
+      summary: Batch OCR
+      description: Process multiple files through the OCR pipeline at once.
+      operationId: ocr_batch_endpoint
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - files
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Multiple PDF or image files to process
+                lang:
+                  type: string
+                  default: "spa+eng"
+                dpi:
+                  type: integer
+                  minimum: 72
+                  maximum: 600
+                  default: 300
+                validate:
+                  type: boolean
+                  default: true
+                force_image:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Batch processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchOcrResponse"
+              example:
+                status: "ok"
+                total_files: 2
+                successful: 2
+                failed: 0
+                results:
+                  - filename: "doc1.pdf"
+                    status: "ok"
+                    text: "..."
+                    metadata:
+                      pages: 3
+                      paragraphs: 20
+                      size_bytes: 5500
+                      ocr_used: false
+                      method: "poppler"
+                      language: "spa+eng"
+                      dpi: 300
+                  - filename: "scan.png"
+                    status: "ok"
+                    text: "..."
+                    metadata:
+                      pages: 1
+                      paragraphs: 5
+                      size_bytes: 1200
+                      ocr_used: true
+                      method: "tesseract"
+                      language: "spa+eng"
+                      dpi: 300
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/prepare:
+    post:
+      tags:
+        - prepare
+      summary: Prepare a document as clean UTF-8 text
+      description: |
+        Extract text from a PDF (with text layer) using Poppler's `pdftotext`
+        or pass through UTF-8 text files. This endpoint does NOT apply OCR.
+        For OCR use `POST /api/v1/ocr` instead.
+
+        Supported formats: `.pdf` (with text layer), `.txt`.
+      operationId: prepare_endpoint
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF or UTF-8 text file
+                skip-validation:
+                  type: boolean
+                  default: false
+                  description: Skip RAG validation of output text
+                pdftotext-bin:
+                  type: string
+                  default: "pdftotext"
+                  description: Path to pdftotext binary
+      responses:
+        "200":
+          description: Document prepared successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrepareResponse"
+              example:
+                status: "ok"
+                text: "Chapter 1\n\nLorem ipsum dolor sit amet..."
+                metadata:
+                  paragraphs: 15
+                  size_bytes: 4200
+                  method: "poppler"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/validate:
+    post:
+      tags:
+        - prepare
+      summary: Validate text for RAG compatibility
+      description: |
+        Validates a UTF-8 text document for RAG ingestion. Checks for:
+        - Minimum character count
+        - UTF-8 encoding validity
+        - Paragraph structure
+      operationId: validate_endpoint
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: UTF-8 text file to validate
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateResponse"
+              example:
+                status: "ok"
+                valid: true
+                issues: []
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication. Configured via `API_KEYS` env var.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token. Secret configured via `JWT_SECRET` env var.
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["ok"]
+          description: Always "ok" when healthy
+        version:
+          type: string
+          description: API version
+          example: "0.3.0"
+        service:
+          type: string
+          description: Service identifier
+          example: "ether-ocr"
+
+    OcrMetadata:
+      type: object
+      description: Metadata about the OCR/extraction process
+      properties:
+        pages:
+          type: integer
+          description: Number of pages processed
+          example: 3
+        paragraphs:
+          type: integer
+          description: Number of paragraphs in output
+          example: 42
+        size_bytes:
+          type: integer
+          description: Size of output text in bytes
+          example: 12345
+        ocr_used:
+          type: boolean
+          description: Whether Tesseract OCR was applied (vs direct text extraction)
+          example: true
+        method:
+          type: string
+          enum: ["poppler", "tesseract", "passthrough"]
+          description: Extraction method used
+          example: "tesseract"
+        language:
+          type: string
+          description: Language(s) used for OCR
+          example: "spa+eng"
+        dpi:
+          type: integer
+          description: DPI used for PDF-to-image conversion
+          example: 300
+
+    OcrResponse:
+      type: object
+      description: Response for single-file OCR
+      properties:
+        status:
+          type: string
+          enum: ["ok"]
+        text:
+          type: string
+          description: Extracted and cleaned UTF-8 text
+        metadata:
+          $ref: "#/components/schemas/OcrMetadata"
+
+    BatchFileResult:
+      type: object
+      description: Result for a single file in a batch request
+      properties:
+        filename:
+          type: string
+          description: Original filename
+        status:
+          type: string
+          enum: ["ok", "error"]
+        text:
+          type: string
+          description: Extracted text (empty on error)
+        error:
+          type: string
+          description: Error message (empty on success)
+        metadata:
+          $ref: "#/components/schemas/OcrMetadata"
+
+    BatchOcrResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["ok"]
+        total_files:
+          type: integer
+          description: Total files submitted
+        successful:
+          type: integer
+          description: Number of files processed successfully
+        failed:
+          type: integer
+          description: Number of files that failed
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchFileResult"
+
+    PrepareMetadata:
+      type: object
+      properties:
+        paragraphs:
+          type: integer
+          description: Number of paragraphs in output
+        size_bytes:
+          type: integer
+          description: Size of output text in bytes
+        method:
+          type: string
+          enum: ["poppler", "passthrough"]
+          description: Method used to extract text
+
+    PrepareResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["ok"]
+        text:
+          type: string
+          description: Cleaned and validated UTF-8 text
+        metadata:
+          $ref: "#/components/schemas/PrepareMetadata"
+
+    ValidationIssue:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Human-readable description of the issue
+
+    ValidateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["ok"]
+        valid:
+          type: boolean
+          description: Whether the text passes RAG validation
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+          description: List of issues found (empty if valid=true)
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error description
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication required
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: "Bearer"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Authentication required. Provide X-API-Key header or Bearer token."
+    PayloadTooLarge:
+      description: Upload exceeds maximum size
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Upload too large. Maximum is 50 MB."
+    UnsupportedMediaType:
+      description: File format not supported
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Unsupported file extension: .docx. Allowed: .pdf, .png, .jpg, .jpeg, .tiff, .tif, .txt"
+    UnprocessableEntity:
+      description: File could not be processed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Rate limit exceeded. Try again later."
